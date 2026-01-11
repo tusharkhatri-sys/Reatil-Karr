@@ -51,8 +51,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                             to={item.path}
                             onClick={isMobile ? toggleSidebar : undefined}
                             className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${isActive
-                                    ? 'bg-brand-600 shadow-lg shadow-brand-900/50 text-white'
-                                    : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                                ? 'bg-brand-600 shadow-lg shadow-brand-900/50 text-white'
+                                : 'text-slate-400 hover:bg-white/5 hover:text-white'
                                 }`}
                         >
                             <item.icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}`} />
@@ -70,7 +70,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
 
             {/* User / Footer area could go here */}
             <div className="p-4 border-t border-white/5 text-xs text-center text-slate-500">
-                © 2024 Retail Karr
+                <p>© 2026 Retail Karr</p>
+                <p className="mt-1 opacity-70">Created by <span className="text-slate-400">Tushar khatri</span></p>
             </div>
         </div>
     );
