@@ -10,13 +10,8 @@ const Header = ({ toggleSidebar, title }) => {
     const [isProfileOpen, setIsProfileOpen] = useState(false);
 
     const handleSignOut = async () => {
-        try {
-            const { error } = await signOut();
-            if (error) throw error;
-            showToast("Logged output successfully", "success");
-        } catch (error) {
-            showToast(error.message, "error");
-        }
+        await signOut();
+        showToast("Logged out successfully", "success");
     };
 
     return (
