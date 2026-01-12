@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Package, ShoppingCart, Users, FileText, Settings, X, Menu, Store } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
 
 const MENU_ITEMS = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
@@ -15,6 +16,14 @@ const MENU_ITEMS = [
 const Sidebar = ({ isOpen, toggleSidebar }) => {
     const location = useLocation();
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+    const { user } = useAuth();
+    const businessType = user?.user_metadata?.business_type || 'retail';
+
+    // Filter Menu Items
+    const filteredMenuItems = MENU_ITEMS.filter(item => {
+        if (item.label === 'Customers' && businessType === 'retail') return false;
+        return true;
+    });
 
     // Resize handler
     useEffect(() => {
@@ -43,7 +52,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
 
             {/* Navigation */}
             <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-                {MENU_ITEMS.map((item) => {
+                {filteredMenuItems.map((item) => {
                     const isActive = location.pathname === item.path;
                     return (
                         <Link

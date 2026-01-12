@@ -15,7 +15,8 @@ const POS = () => {
     const { showToast } = useToast();
 
     // -- State --
-    const [saleMode, setSaleMode] = useState('retail'); // 'retail' | 'wholesale'
+    // Strictly enforce mode based on user profile
+    const [saleMode] = useState(user?.user_metadata?.business_type || 'retail'); // 'retail' | 'wholesale'
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -424,52 +425,71 @@ const POS = () => {
                     {/* Product Grid */}
                     <div className="flex-1 overflow-y-auto pr-1 pb-20 lg:pb-0"> {/* Padding bottom for FAB on mobile */}
                         <motion.div layout className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 lg:gap-4 pb-20 lg:pb-0">
-                            <AnimatePresence>
-                                {filteredProducts.map(product => (
-                                    <motion.button
-                                        layout
-                                        initial={{ opacity: 0, scale: 0.9 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        exit={{ opacity: 0, scale: 0.9 }}
-                                        whileHover={{ scale: 1.02, y: -2 }}
-                                        whileTap={{ scale: 0.98 }}
-                                        key={product.id}
-                                        onClick={() => addToCart(product)}
-                                        className="relative group bg-gradient-to-br from-white/10 to-white/5 p-3 lg:p-4 rounded-2xl border border-white/10 hover:border-brand-500/50 hover:shadow-xl hover:shadow-brand-500/10 transition-all text-left flex flex-col justify-between h-[150px] lg:h-[160px] overflow-hidden"
-                                    >
-                                        <div className="absolute -right-4 -top-4 opacity-[0.03] group-hover:opacity-10 transition-opacity duration-500">
-                                            <Box className="w-24 h-24 rotate-12" />
-                                        </div>
-
-                                        <div className="relative z-10 w-full">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <span className="text-[10px] font-bold tracking-wider px-2 py-1 rounded-md bg-black/40 text-brand-200 border border-white/5 backdrop-blur-sm">
-                                                    {product.category?.toUpperCase() || 'GENERAL'}
-                                                </span>
+                            <AnimatePresence mode="popLayout">
+                                {loading ? (
+                                    // Skeleton Loader
+                                    [...Array(12)].map((_, i) => (
+                                        <div key={`skel-${i}`} className="h-[150px] lg:h-[160px] rounded-2xl bg-white/5 animate-pulse border border-white/5 p-4 flex flex-col justify-between">
+                                            <div>
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div className="h-5 w-16 bg-white/10 rounded-md"></div>
+                                                </div>
+                                                <div className="h-4 w-3/4 bg-white/10 rounded mb-1"></div>
+                                                <div className="h-4 w-1/2 bg-white/10 rounded"></div>
                                             </div>
-                                            <h3 className="font-semibold text-white text-sm lg:text-lg leading-tight mb-1 line-clamp-2 min-h-[2.5rem] lg:min-h-[3.5rem] group-hover:text-brand-100 transition-colors">
-                                                {product.name}
-                                            </h3>
-                                        </div>
-
-                                        <div className="relative z-10 flex justify-between items-end mt-2 w-full">
-                                            <div className="flex flex-col">
-                                                <span className="text-[10px] lg:text-xs text-slate-400 font-medium mb-0.5">Price</span>
-                                                <span className="text-white font-bold text-lg lg:text-xl tracking-tight">₹{product.price}</span>
-                                            </div>
-                                            <div className={`flex flex-col items-end`}>
-                                                <span className="text-[10px] text-slate-400 font-medium mb-0.5">Stock</span>
-                                                <span className={`text-[10px] lg:text-xs font-bold px-1.5 py-0.5 rounded ${product.stock > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
-                                                    {product.stock} {product.unit}
-                                                </span>
+                                            <div className="flex justify-between items-end mt-2">
+                                                <div className="w-16 h-8 bg-white/10 rounded"></div>
+                                                <div className="w-12 h-5 bg-white/10 rounded"></div>
                                             </div>
                                         </div>
+                                    ))
+                                ) : (
+                                    filteredProducts.map(product => (
+                                        <motion.button
+                                            layout
+                                            initial={{ opacity: 0, scale: 0.9 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0.9 }}
+                                            whileHover={{ scale: 1.02, y: -2 }}
+                                            whileTap={{ scale: 0.98 }}
+                                            key={product.id}
+                                            onClick={() => addToCart(product)}
+                                            className="relative group bg-gradient-to-br from-white/10 to-white/5 p-3 lg:p-4 rounded-2xl border border-white/10 hover:border-brand-500/50 hover:shadow-xl hover:shadow-brand-500/10 transition-all text-left flex flex-col justify-between h-[150px] lg:h-[160px] overflow-hidden"
+                                        >
+                                            <div className="absolute -right-4 -top-4 opacity-[0.03] group-hover:opacity-10 transition-opacity duration-500">
+                                                <Box className="w-24 h-24 rotate-12" />
+                                            </div>
 
-                                        <div className="absolute inset-0 bg-brand-500/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20 backdrop-blur-[2px]">
-                                            <Plus className="w-8 h-8 text-white drop-shadow-lg" />
-                                        </div>
-                                    </motion.button>
-                                ))}
+                                            <div className="relative z-10 w-full">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <span className="text-[10px] font-bold tracking-wider px-2 py-1 rounded-md bg-black/40 text-brand-200 border border-white/5 backdrop-blur-sm">
+                                                        {product.category?.toUpperCase() || 'GENERAL'}
+                                                    </span>
+                                                </div>
+                                                <h3 className="font-semibold text-white text-sm lg:text-lg leading-tight mb-1 line-clamp-2 min-h-[2.5rem] lg:min-h-[3.5rem] group-hover:text-brand-100 transition-colors">
+                                                    {product.name}
+                                                </h3>
+                                            </div>
+
+                                            <div className="relative z-10 flex justify-between items-end mt-2 w-full">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] lg:text-xs text-slate-400 font-medium mb-0.5">Price</span>
+                                                    <span className="text-white font-bold text-lg lg:text-xl tracking-tight">₹{product.price}</span>
+                                                </div>
+                                                <div className={`flex flex-col items-end`}>
+                                                    <span className="text-[10px] text-slate-400 font-medium mb-0.5">Stock</span>
+                                                    <span className={`text-[10px] lg:text-xs font-bold px-1.5 py-0.5 rounded ${product.stock > 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
+                                                        {product.stock} {product.unit}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="absolute inset-0 bg-brand-500/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20 backdrop-blur-[2px]">
+                                                <Plus className="w-8 h-8 text-white drop-shadow-lg" />
+                                            </div>
+                                        </motion.button>
+                                    ))
+                                )}
                             </AnimatePresence>
                         </motion.div>
 
@@ -513,30 +533,17 @@ const POS = () => {
                         </button>
                     </div>
 
-                    {/* Header: Sale Mode Toggle */}
+                    {/* Header: Sale Mode Toggle REMOVED - Enforced by Business Type */}
                     <div className="p-3 lg:p-4 border-b border-white/5 bg-black/20 shrink-0">
-                        <div className="grid grid-cols-2 bg-dark-950/50 p-1.5 rounded-xl border border-white/5 mb-4 relative overflow-hidden">
-                            {['retail', 'wholesale'].map((mode) => (
-                                <button
-                                    key={mode}
-                                    onClick={() => setSaleMode(mode)}
-                                    className={`relative z-10 py-2.5 rounded-lg text-sm font-semibold transition-colors duration-200 capitalise flex items-center justify-center gap-2 ${saleMode === mode ? 'text-white' : 'text-slate-500 hover:text-slate-300'
-                                        }`}
-                                >
-                                    {mode === 'wholesale' && <User className="w-4 h-4" />}
-                                    <span className="capitalize">{mode}</span>
-
-                                    {saleMode === mode && (
-                                        <motion.div
-                                            layoutId="activeTab"
-                                            className={`absolute inset-0 rounded-lg shadow-sm ${mode === 'retail' ? 'bg-brand-600' : 'bg-purple-600'
-                                                }`}
-                                            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                                            style={{ zIndex: -1 }}
-                                        />
-                                    )}
-                                </button>
-                            ))}
+                        {/* Display Active Mode Badge */}
+                        <div className="flex items-center justify-between mb-4">
+                            <span className="text-white font-bold text-lg flex items-center gap-2">
+                                {saleMode === 'wholesale' ? <User className="w-5 h-5 text-purple-400" /> : <ShoppingCart className="w-5 h-5 text-brand-400" />}
+                                {saleMode === 'wholesale' ? 'Wholesale Billing' : 'Retail Billing'}
+                            </span>
+                            <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded border ${saleMode === 'wholesale' ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-brand-500/20 text-brand-300 border-brand-500/30'}`}>
+                                {saleMode.toUpperCase()} MODE
+                            </span>
                         </div>
 
                         {/* Customer Info & Selection */}
