@@ -13,8 +13,6 @@ const Register = () => {
         ownerName: '',
         email: '',
         phone: '',
-        phone: '',
-        phone: '',
         password: '',
         businessType: '' // No default selection
     });
@@ -48,7 +46,6 @@ const Register = () => {
                 options: {
                     data: {
                         business_name: formData.businessName,
-                        full_name: formData.ownerName,
                         full_name: formData.ownerName,
                         phone: formData.phone,
                         business_type: formData.businessType
