@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import AuthLayout from '../layouts/AuthLayout';
-import { Mail, Lock, User, Building2, Phone, Loader2 } from 'lucide-react';
+import { Mail, Lock, User, Building2, Phone, Loader2, ChevronDown } from 'lucide-react';
 
 import { registerSchema } from '../schemas/auth';
 
@@ -13,7 +13,10 @@ const Register = () => {
         ownerName: '',
         email: '',
         phone: '',
-        password: ''
+        phone: '',
+        phone: '',
+        password: '',
+        businessType: '' // No default selection
     });
     const [loading, setLoading] = useState(false);
     const { signUp } = useAuth();
@@ -46,7 +49,9 @@ const Register = () => {
                     data: {
                         business_name: formData.businessName,
                         full_name: formData.ownerName,
-                        phone: formData.phone
+                        full_name: formData.ownerName,
+                        phone: formData.phone,
+                        business_type: formData.businessType
                     }
                 }
             });
@@ -70,6 +75,25 @@ const Register = () => {
         >
             <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Error Banner Removed - Using Toasts now */}
+
+                {/* Business Type Selection (Dropdown) */}
+                <div className="mb-4">
+                    <label className="block text-brand-100 text-xs font-medium mb-1 pl-1">Business Type</label>
+                    <div className="relative">
+                        <select
+                            name="businessType"
+                            required
+                            value={formData.businessType}
+                            onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
+                            className="input-field w-full bg-white/5 border-brand-500/30 text-white placeholder-brand-300/50 px-3 py-2 rounded-lg focus:bg-brand-900/50 appearance-none cursor-pointer"
+                        >
+                            <option value="" disabled className="bg-dark-800 text-gray-400">Select Business Type</option>
+                            <option value="retail" className="bg-dark-800 text-white">Retailer</option>
+                            <option value="wholesale" className="bg-dark-800 text-white">Wholesaler</option>
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-300 w-4 h-4 pointer-events-none" />
+                    </div>
+                </div>
 
                 <div className="grid grid-cols-2 gap-4">
                     {/* Business Name */}

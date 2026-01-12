@@ -13,6 +13,7 @@ export const registerSchema = z.object({
     email: z.string().email({ message: "Invalid email address" }),
     phone: z.string().regex(/^[0-9]{10}$/, { message: "Phone number must be 10 digits" }),
     password: z.string().min(6, { message: "Password must be at least 6 characters" }),
+    businessType: z.enum(['retail', 'wholesale'], { message: "Please select a business type" }),
 });
 
 // OTP Schema

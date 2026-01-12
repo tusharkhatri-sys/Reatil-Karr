@@ -42,9 +42,18 @@ const Header = ({ toggleSidebar, title }) => {
                             {user?.user_metadata?.business_name?.[0]?.toUpperCase() || 'U'}
                         </div>
                         <div className="hidden md:block text-left">
-                            <p className="text-sm font-medium text-white leading-none">
-                                {user?.user_metadata?.full_name || user?.user_metadata?.owner_name || 'Owner'}
-                            </p>
+                            <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium text-white leading-none">
+                                    {user?.user_metadata?.full_name || user?.user_metadata?.owner_name || 'Owner'}
+                                </p>
+                                {/* Business Type Badge */}
+                                <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${user?.user_metadata?.business_type === 'wholesale'
+                                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                    }`}>
+                                    {user?.user_metadata?.business_type === 'wholesale' ? 'Whsle' : 'Retail'}
+                                </span>
+                            </div>
                             <p className="text-xs text-brand-300">
                                 {user?.user_metadata?.business_name || 'Retail Karr'}
                             </p>
