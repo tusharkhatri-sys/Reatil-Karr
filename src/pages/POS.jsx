@@ -244,6 +244,9 @@ const POS = () => {
             };
             setLastInvoice(fullInvoice);
 
+            // Save customer reference before clearing
+            const invoiceCustomer = selectedCustomer;
+
             setIsCheckoutOpen(false);
             setCart([]);
             setSelectedCustomer(null);
@@ -252,14 +255,14 @@ const POS = () => {
             setCustomerSearch('');
 
             // 8. Update Customer's Advance Balance in DB
-            if (selectedCustomer && (paymentData.advanceUsed > 0 || paymentData.newAdvance > 0)) {
-                const currentAdvance = selectedCustomer.advance_balance || 0;
+            if (invoiceCustomer && (paymentData.advanceUsed > 0 || paymentData.newAdvance > 0)) {
+                const currentAdvance = invoiceCustomer.advance_balance || 0;
                 const newAdvanceTotal = currentAdvance - (paymentData.advanceUsed || 0) + (paymentData.newAdvance || 0);
 
                 await supabase
                     .from('customers')
                     .update({ advance_balance: Math.max(0, newAdvanceTotal) })
-                    .eq('id', selectedCustomer.id);
+                    .eq('id', invoiceCustomer.id);
             }
 
             // 7. Handle Post-Checkout Action based on Sale Mode
@@ -268,12 +271,12 @@ const POS = () => {
                 setTimeout(() => {
                     window.print();
                 }, 500);
-            } else if (saleMode === 'wholesale' && selectedCustomer?.phone) {
+            } else if (saleMode === 'wholesale' && invoiceCustomer?.phone) {
                 // Wholesale: Show Success Modal with View/Share options
                 setSuccessModal({
                     open: true,
                     invoice: fullInvoice,
-                    customer: selectedCustomer,
+                    customer: invoiceCustomer,
                     paymentData: paymentData,
                     waLink: null, // Will be set when user clicks Share
                 });
