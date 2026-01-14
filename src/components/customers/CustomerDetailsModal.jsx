@@ -185,7 +185,7 @@ const CustomerDetailsModal = ({ isOpen, onClose, customer, sellerProfile }) => {
                                                     ₹{inv.total_amount}
                                                 </td>
                                                 <td className="px-4 py-4 text-emerald-400">
-                                                    ₹{Math.max(inv.paid_amount || 0, inv.cash_received || 0)}
+                                                    ₹{inv.paid_amount || 0}
                                                 </td>
                                                 <td className="px-4 py-4">
                                                     {inv.due_amount > 0 ? (
