@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import AppLayout from '../components/layout/AppLayout';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
-import { Search, ShoppingCart, User, Plus, Trash2, CreditCard, Receipt, Minus, Box, Tag, X, Save, Loader2 } from 'lucide-react';
+import { Search, ShoppingCart, User, Plus, Trash2, CreditCard, Receipt, Minus, Box, Tag, X, Save, Loader2, CheckCircle, ArrowRight } from 'lucide-react';
 import Input from '../components/ui/Input';
 import { useToast } from '../context/ToastContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -30,6 +30,9 @@ const POS = () => {
     const [cart, setCart] = useState([]); // Array of { product, quantity, total }
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [previousBalance, setPreviousBalance] = useState(0);
+    const [advanceBalance, setAdvanceBalance] = useState(0);
+    const [lastInvoice, setLastInvoice] = useState(null);
+    const [successModal, setSuccessModal] = useState({ open: false, invoice: null, customer: null, paymentData: null });
     const [customers, setCustomers] = useState([]);
     const [customerSearch, setCustomerSearch] = useState('');
     const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
@@ -38,7 +41,6 @@ const POS = () => {
     // Checkout & Invoice State
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
     const [sellerProfile, setSellerProfile] = useState(null);
-    const [lastInvoice, setLastInvoice] = useState(null);
 
     // -- Fetch Initial Data --
     useEffect(() => {
@@ -156,10 +158,12 @@ const POS = () => {
                     due_amount: paymentData.dueAmount,
                     payment_status: paymentData.paymentStatus,
                     payment_method: paymentData.paymentMethod,
-                    invoice_prefix: invoicePrefix,           // New Field
-                    invoice_sequence: nextSequence,          // New Field
-                    full_invoice_number: fullInvoiceNumber,   // New Field
-                    cash_received: paymentData.cashReceived || paymentData.paidAmount // Track total cash provided
+                    invoice_prefix: invoicePrefix,
+                    invoice_sequence: nextSequence,
+                    full_invoice_number: fullInvoiceNumber,
+                    cash_received: paymentData.cashReceived || paymentData.paidAmount,
+                    advance_used: paymentData.advanceUsed || 0,
+                    advance_credited: paymentData.newAdvance || 0
                 }])
                 .select()
                 .single();
@@ -234,24 +238,276 @@ const POS = () => {
                 ...invoice,
                 items: invoiceItems,
                 previous_balance: previousBalance,
-                cash_received: cashReceived
+                cash_received: cashReceived,
+                advance_used: paymentData.advanceUsed || 0,
+                new_advance: paymentData.newAdvance || 0
             };
             setLastInvoice(fullInvoice);
 
             setIsCheckoutOpen(false);
             setCart([]);
             setSelectedCustomer(null);
-            setPreviousBalance(0); // Reset for next
+            setPreviousBalance(0);
+            setAdvanceBalance(0);
             setCustomerSearch('');
 
-            // 7. Trigger Print (Wait for render)
-            setTimeout(() => {
-                window.print();
-            }, 500);
+            // 8. Update Customer's Advance Balance in DB
+            if (selectedCustomer && (paymentData.advanceUsed > 0 || paymentData.newAdvance > 0)) {
+                const currentAdvance = selectedCustomer.advance_balance || 0;
+                const newAdvanceTotal = currentAdvance - (paymentData.advanceUsed || 0) + (paymentData.newAdvance || 0);
+
+                await supabase
+                    .from('customers')
+                    .update({ advance_balance: Math.max(0, newAdvanceTotal) })
+                    .eq('id', selectedCustomer.id);
+            }
+
+            // 7. Handle Post-Checkout Action based on Sale Mode
+            if (saleMode === 'retail') {
+                // Retail: Auto Print
+                setTimeout(() => {
+                    window.print();
+                }, 500);
+            } else if (saleMode === 'wholesale' && selectedCustomer?.phone) {
+                // Wholesale: Show Success Modal with View/Share options
+                setSuccessModal({
+                    open: true,
+                    invoice: fullInvoice,
+                    customer: selectedCustomer,
+                    paymentData: paymentData,
+                    waLink: null, // Will be set when user clicks Share
+                });
+            }
 
         } catch (error) {
             console.error('Checkout Error:', error);
             showToast('Checkout Failed: ' + error.message, 'error');
+        }
+    };
+
+    // --- SUCCESS MODAL ACTIONS ---
+    // Helper: Generate PDF using direct jsPDF (no html2canvas)
+    const generateInvoicePDF = (invoice, customer, paymentData) => {
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        let y = 20;
+        const lineHeight = 6;
+        const margin = 15;
+
+        // Helper functions
+        const centerText = (text, yPos, fontSize = 12) => {
+            pdf.setFontSize(fontSize);
+            const textWidth = pdf.getTextWidth(text);
+            pdf.text(text, (pageWidth - textWidth) / 2, yPos);
+        };
+        const leftText = (text, yPos) => pdf.text(text, margin, yPos);
+        const rightText = (text, yPos) => {
+            const textWidth = pdf.getTextWidth(text);
+            pdf.text(text, pageWidth - margin - textWidth, yPos);
+        };
+        const drawLine = (yPos) => {
+            pdf.setDrawColor(150);
+            pdf.setLineWidth(0.3);
+            pdf.line(margin, yPos, pageWidth - margin, yPos);
+        };
+
+        // Header
+        pdf.setFont('helvetica', 'bold');
+        centerText(sellerProfile?.business_name || 'Retail Karr', y, 18);
+        y += 8;
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(10);
+        if (sellerProfile?.address) {
+            centerText(sellerProfile.address, y, 9);
+            y += 5;
+        }
+        if (sellerProfile?.phone) {
+            centerText(`Ph: ${sellerProfile.phone}`, y, 9);
+            y += 5;
+        }
+
+        // Divider
+        y += 3;
+        drawLine(y);
+        y += 8;
+
+        // Invoice Info
+        pdf.setFontSize(10);
+        leftText(`Bill No: #${invoice.full_invoice_number || invoice.invoice_number}`, y);
+        rightText(`Date: ${new Date(invoice.created_at).toLocaleDateString('en-IN')}`, y);
+        y += lineHeight;
+
+        if (customer) {
+            leftText(`Customer: ${customer.name}`, y);
+            rightText(`Phone: ${customer.phone}`, y);
+            y += lineHeight;
+        }
+
+        // Table Header
+        y += 5;
+        drawLine(y);
+        y += 5;
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(9);
+        pdf.text('Item', margin, y);
+        pdf.text('Qty', margin + 80, y);
+        pdf.text('Rate', margin + 100, y);
+        pdf.text('Amount', margin + 130, y);
+        y += 4;
+        drawLine(y);
+        y += 5;
+
+        // Items
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(9);
+        if (invoice.items && invoice.items.length > 0) {
+            invoice.items.forEach(item => {
+                const name = item.product_name.length > 30 ? item.product_name.substring(0, 27) + '...' : item.product_name;
+                pdf.text(name, margin, y);
+                pdf.text(`${item.quantity}`, margin + 80, y);
+                pdf.text(`${item.price}`, margin + 100, y);
+                pdf.text(`${item.total}`, margin + 130, y);
+                y += lineHeight;
+            });
+        }
+
+        // Totals
+        y += 3;
+        drawLine(y);
+        y += 6;
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(10);
+        leftText('Subtotal:', y);
+        rightText(`Rs. ${invoice.total_amount}`, y);
+        y += lineHeight;
+
+        if (parseFloat(invoice.previous_balance) > 0) {
+            leftText('Previous Outstanding:', y);
+            rightText(`Rs. ${Number(invoice.previous_balance).toFixed(2)}`, y);
+            y += lineHeight;
+            pdf.setFontSize(12);
+            leftText('Net Payable:', y);
+            rightText(`Rs. ${(parseFloat(invoice.total_amount) + parseFloat(invoice.previous_balance)).toFixed(2)}`, y);
+            y += lineHeight;
+            pdf.setFontSize(10);
+        }
+
+        leftText(`Paid [${invoice.payment_method}]:`, y);
+        rightText(`Rs. ${Number(invoice.cash_received || invoice.paid_amount).toFixed(2)}`, y);
+        y += lineHeight;
+
+        // Advance Used
+        const advanceUsed = parseFloat(invoice.advance_used || 0);
+        if (advanceUsed > 0) {
+            pdf.setTextColor(5, 150, 105); // Green
+            leftText('✓ Advance Used:', y);
+            rightText(`- Rs. ${advanceUsed.toFixed(2)}`, y);
+            y += lineHeight;
+            pdf.setTextColor(0); // Reset to black
+        }
+
+        // New Advance Credited
+        const newAdvance = parseFloat(invoice.new_advance || invoice.advance_credited || 0);
+        if (newAdvance > 0) {
+            pdf.setTextColor(5, 150, 105); // Green
+            pdf.setFillColor(209, 250, 229);
+            pdf.rect(margin, y - 4, pageWidth - 2 * margin, 8, 'F');
+            leftText('★ Advance Credited:', y);
+            rightText(`+ Rs. ${newAdvance.toFixed(2)}`, y);
+            y += lineHeight;
+            pdf.setTextColor(0); // Reset to black
+        }
+
+        const outstanding = Math.max(0, (parseFloat(invoice.total_amount) + parseFloat(invoice.previous_balance || 0) - advanceUsed) - parseFloat(invoice.cash_received || invoice.paid_amount));
+        pdf.setFillColor(240, 240, 240);
+        pdf.rect(margin, y - 4, pageWidth - 2 * margin, 8, 'F');
+        leftText('Total Outstanding:', y);
+        rightText(`Rs. ${outstanding.toFixed(2)}`, y);
+        y += 12;
+
+        // Footer
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
+        centerText('Thank you for your visit!', y, 9);
+        y += 5;
+        pdf.setTextColor(150);
+        centerText('Powered by RetailKarr', y, 7);
+
+        return pdf;
+    };
+
+    const handleShareWhatsApp = async () => {
+        const { invoice, customer, paymentData } = successModal;
+        if (!invoice || !customer) return;
+
+        showToast('Generating PDF...', 'loading');
+
+        try {
+            // Generate PDF using direct jsPDF
+            const pdf = generateInvoicePDF(invoice, customer, paymentData);
+            const pdfBlob = pdf.output('blob');
+            const fileName = `Invoice_${invoice.invoice_number}.pdf`;
+            const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+
+            // Prepare Message
+            const cleanPhone = customer.phone.replace(/\D/g, '').slice(-10);
+            const fullPhone = `91${cleanPhone}`;
+
+            const message = `*INVOICE: #${invoice.invoice_number}*
+Date: ${new Date().toLocaleDateString()}
+
+Dear *${customer.name}*,
+Thank you for your purchase at *${sellerProfile?.business_name || 'Retail Karr'}*.
+
+Bill Summary:
+Total: Rs.${paymentData.totalAmount}
+Paid: Rs.${paymentData.paidAmount}
+*Balance Due: Rs.${paymentData.dueAmount}*
+
+Thank you!`;
+
+            // Attempt Native Share (Mobile)
+            if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+                await navigator.share({
+                    files: [pdfFile],
+                    title: `Invoice #${invoice.invoice_number}`,
+                    text: message
+                });
+                showToast('Shared successfully!', 'success');
+            } else {
+                // Desktop Fallback: Download PDF and show "Open Chat" button
+                pdf.save(fileName);
+                showToast('Invoice Downloaded!', 'success');
+
+                const waUrl = `https://wa.me/${fullPhone}?text=${encodeURIComponent(message + '\n\n_(Please attach the downloaded invoice PDF)_')}`;
+                setSuccessModal(prev => ({ ...prev, waLink: waUrl }));
+            }
+
+        } catch (err) {
+            console.error("Share Error:", err);
+            if (err.name !== 'AbortError') {
+                showToast('Failed to share invoice', 'error');
+            }
+        }
+    };
+
+    const handleViewBill = async () => {
+        const { invoice, customer, paymentData } = successModal;
+        if (!invoice) {
+            showToast('No invoice data', 'error');
+            return;
+        }
+        showToast('Opening Preview...', 'loading');
+        try {
+            const pdf = generateInvoicePDF(invoice, customer, paymentData);
+            const pdfBlob = pdf.output('blob');
+            const blobUrl = URL.createObjectURL(pdfBlob);
+            window.open(blobUrl, '_blank');
+            showToast('Preview Opened', 'success');
+        } catch (e) {
+            console.error('Preview Error:', e);
+            showToast('Preview Failed', 'error');
         }
     };
 
@@ -598,19 +854,23 @@ const POS = () => {
                                                                             setSelectedCustomer(cust);
                                                                             setShowCustomerDropdown(false);
                                                                             setCustomerSearch('');
-                                                                            // Fetch Balance
-                                                                            const fetchBalance = async () => {
-                                                                                const { data, error } = await supabase
+                                                                            // Fetch Balance & Advance
+                                                                            const fetchBalances = async () => {
+                                                                                // Get outstanding dues from invoices
+                                                                                const { data: invoiceData } = await supabase
                                                                                     .from('invoices')
                                                                                     .select('due_amount')
                                                                                     .eq('customer_id', cust.id);
 
-                                                                                if (data) {
-                                                                                    const totalDue = data.reduce((sum, inv) => sum + (inv.due_amount || 0), 0);
+                                                                                if (invoiceData) {
+                                                                                    const totalDue = invoiceData.reduce((sum, inv) => sum + (inv.due_amount || 0), 0);
                                                                                     setPreviousBalance(totalDue);
                                                                                 }
+
+                                                                                // Get advance balance from customer record
+                                                                                setAdvanceBalance(cust.advance_balance || 0);
                                                                             };
-                                                                            fetchBalance();
+                                                                            fetchBalances();
                                                                         }}
                                                                         className="w-full text-left p-3 hover:bg-white/5 border-b border-white/5 last:border-0 transition-colors flex flex-col gap-0.5"
                                                                     >
@@ -763,8 +1023,85 @@ const POS = () => {
                 cartTotal={cart.reduce((sum, i) => sum + i.total, 0)}
                 customer={selectedCustomer}
                 previousBalance={previousBalance}
+                advanceBalance={advanceBalance}
                 onComplete={handlePaymentComplete}
             />
+
+            {/* Success Modal */}
+            <AnimatePresence>
+                {successModal.open && successModal.invoice && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            className="bg-dark-900 border border-white/10 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden"
+                        >
+                            <div className="p-6 text-center border-b border-white/5 bg-emerald-500/5">
+                                <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <CheckCircle className="w-8 h-8 text-emerald-400" />
+                                </div>
+                                <h2 className="text-2xl font-bold text-white mb-1">Invoice Created!</h2>
+                                <p className="text-slate-400">Transaction completed successfully.</p>
+                            </div>
+
+                            <div className="p-6 space-y-4">
+                                <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+                                    <div className="flex justify-between text-sm mb-2">
+                                        <span className="text-slate-400">Invoice No:</span>
+                                        <span className="text-white font-mono font-bold">#{successModal.invoice.invoice_number}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm mb-2">
+                                        <span className="text-slate-400">Customer:</span>
+                                        <span className="text-white font-medium">{successModal.customer?.name}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm text-brand-300 font-bold border-t border-white/10 pt-2 mt-2">
+                                        <span>Total Amount:</span>
+                                        <span>₹{successModal.paymentData?.totalAmount}</span>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        onClick={handleViewBill}
+                                        className="px-4 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-medium transition-colors border border-white/10 flex items-center justify-center gap-2"
+                                    >
+                                        <Box className="w-4 h-4" />
+                                        View Bill
+                                    </button>
+
+                                    {!successModal.waLink ? (
+                                        <button
+                                            onClick={handleShareWhatsApp}
+                                            className="px-4 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold transition-colors shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
+                                        >
+                                            <Receipt className="w-4 h-4" />
+                                            Share on WA
+                                        </button>
+                                    ) : (
+                                        <a
+                                            href={successModal.waLink}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="px-4 py-3 bg-green-500 hover:bg-green-600 text-white rounded-xl font-bold transition-colors shadow-lg shadow-green-500/20 flex items-center justify-center gap-2"
+                                        >
+                                            <ArrowRight className="w-4 h-4" />
+                                            Open Chat
+                                        </a>
+                                    )}
+                                </div>
+
+                                <button
+                                    onClick={() => setSuccessModal({ open: false, invoice: null })}
+                                    className="w-full py-3 text-slate-500 hover:text-slate-300 text-sm font-medium transition-colors"
+                                >
+                                    Close & Start New Sale
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             {/* Add Customer Modal */}
             <AnimatePresence>

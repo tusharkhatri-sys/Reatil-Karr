@@ -1,45 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, CreditCard, Banknote, User, CheckCircle, Calculator } from 'lucide-react';
+import { X, CreditCard, Banknote, User, CheckCircle, Calculator, Wallet } from 'lucide-react';
 
-const CheckoutModal = ({ isOpen, onClose, cartTotal, customer, previousBalance = 0, onComplete }) => {
+const CheckoutModal = ({ isOpen, onClose, cartTotal, customer, previousBalance = 0, advanceBalance = 0, onComplete }) => {
     const [amountReceived, setAmountReceived] = useState('');
     const [paymentMethod, setPaymentMethod] = useState('Cash'); // Cash, UPI, Card
+    const [useAdvance, setUseAdvance] = useState(false); // Toggle to use advance balance
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Calculate Paid & Due
-    // If Cash: User inputs amount. If Online/Card: Usually full amount (but flexible).
+    // Calculate amounts
     const numericReceived = parseFloat(amountReceived) || 0;
-    const dueAmount = Math.max(0, cartTotal - numericReceived);
-    const returnAmount = Math.max(0, numericReceived - cartTotal);
+    const advanceUsed = useAdvance ? Math.min(advanceBalance, cartTotal + previousBalance) : 0;
+    const totalPayable = cartTotal + previousBalance - advanceUsed;
+    const dueAmount = Math.max(0, totalPayable - numericReceived);
+    const excessPayment = Math.max(0, numericReceived - totalPayable); // This becomes new advance
 
-    // Auto-fill full amount for non-wholesale initially or if user wants "Full Pay"
+    // Reset on open
     useEffect(() => {
         if (isOpen) {
-            setAmountReceived(''); // Reset on open
+            setAmountReceived('');
+            setUseAdvance(false);
         }
     }, [isOpen]);
 
     const handleQuickPay = () => {
-        setAmountReceived(cartTotal.toString());
+        setAmountReceived(Math.max(0, totalPayable).toString());
     };
 
     const handleSubmit = async () => {
         if (!amountReceived && amountReceived !== 0) return;
 
         setIsSubmitting(true);
-        const finalPaid = Math.min(numericReceived, cartTotal); // Can't pay more than total effectively for database logic usually, but here we track actual received
-        // Actually: Paid = what they gave. Due = Total - Paid.
-        // If Paid > Total, Due is 0, Return is Paid - Total.
-        // We typically store "Paid Amount" as the amount contributing to the bill. Extra is change.
 
         const paymentData = {
             totalAmount: cartTotal,
-            paidAmount: numericReceived, // Full amount allocated to this invoice (can be > total)
-            dueAmount: cartTotal - numericReceived, // Can be negative (Advance)
+            paidAmount: numericReceived,
+            dueAmount: dueAmount,
             paymentMethod,
-            paymentStatus: (cartTotal - numericReceived) <= 0.01 ? 'paid' : 'partial', // Tolerance 0.01
-            cashReceived: numericReceived
+            paymentStatus: dueAmount <= 0.01 ? 'paid' : 'partial',
+            cashReceived: numericReceived,
+            // Advance related
+            advanceUsed: advanceUsed,
+            newAdvance: excessPayment, // Overpayment becomes advance
         };
 
         await onComplete(paymentData);
@@ -73,26 +75,89 @@ const CheckoutModal = ({ isOpen, onClose, cartTotal, customer, previousBalance =
                         </button>
                     </div>
 
-                    <div className="p-6 space-y-6 overflow-y-auto">
+                    <div className="p-6 space-y-5 overflow-y-auto">
 
                         {/* Summary Card */}
-                        <div className="bg-white/5 rounded-xl p-4 border border-white/10 flex justify-between items-center relative overflow-hidden">
-                            <div className="relative z-10">
-                                <p className="text-slate-400 text-sm font-medium mb-1">Total Payable</p>
-                                <p className="text-4xl font-bold text-white tracking-tight">₹{cartTotal.toLocaleString()}</p>
-                            </div>
-                            {customer && (
-                                <div className="text-right relative z-10">
-                                    <div className="flex items-center justify-end gap-1.5 text-brand-300 mb-1">
-                                        <User className="w-3.5 h-3.5" />
-                                        <span className="text-xs font-bold uppercase tracking-wider">Customer</span>
-                                    </div>
-                                    <p className="text-white font-medium">{customer.name}</p>
-                                    <p className="text-xs text-slate-500">{customer.phone}</p>
+                        <div className="bg-white/5 rounded-xl p-4 border border-white/10 relative overflow-hidden">
+                            <div className="flex justify-between items-center">
+                                <div className="relative z-10">
+                                    <p className="text-slate-400 text-sm font-medium mb-1">Bill Amount</p>
+                                    <p className="text-3xl font-bold text-white tracking-tight">₹{cartTotal.toLocaleString()}</p>
                                 </div>
-                            )}
+                                {customer && (
+                                    <div className="text-right relative z-10">
+                                        <div className="flex items-center justify-end gap-1.5 text-brand-300 mb-1">
+                                            <User className="w-3.5 h-3.5" />
+                                            <span className="text-xs font-bold uppercase tracking-wider">Customer</span>
+                                        </div>
+                                        <p className="text-white font-medium">{customer.name}</p>
+                                        <p className="text-xs text-slate-500">{customer.phone}</p>
+                                    </div>
+                                )}
+                            </div>
                             {/* Bg Decoration */}
                             <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-brand-500/10 to-transparent pointer-events-none" />
+                        </div>
+
+                        {/* Previous Balance & Advance Balance Info */}
+                        {customer && (previousBalance > 0 || advanceBalance > 0) && (
+                            <div className="grid grid-cols-2 gap-3">
+                                {previousBalance > 0 && (
+                                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                                        <p className="text-xs text-red-400 font-medium mb-1">Previous Due</p>
+                                        <p className="text-lg font-bold text-red-200">₹{previousBalance.toLocaleString()}</p>
+                                    </div>
+                                )}
+                                {advanceBalance > 0 && (
+                                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                                        <p className="text-xs text-emerald-400 font-medium mb-1">Advance Balance</p>
+                                        <p className="text-lg font-bold text-emerald-200">₹{advanceBalance.toLocaleString()}</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Use Advance Toggle */}
+                        {customer && advanceBalance > 0 && (
+                            <div
+                                onClick={() => setUseAdvance(!useAdvance)}
+                                className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${useAdvance
+                                        ? 'bg-emerald-500/20 border-emerald-500/40'
+                                        : 'bg-white/5 border-white/10 hover:border-white/20'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${useAdvance ? 'bg-emerald-500' : 'bg-white/10'}`}>
+                                        <Wallet className={`w-5 h-5 ${useAdvance ? 'text-white' : 'text-slate-400'}`} />
+                                    </div>
+                                    <div>
+                                        <p className={`font-semibold ${useAdvance ? 'text-emerald-300' : 'text-white'}`}>Use Advance Balance</p>
+                                        <p className="text-xs text-slate-400">
+                                            {useAdvance
+                                                ? `₹${advanceUsed.toLocaleString()} will be deducted`
+                                                : `₹${advanceBalance.toLocaleString()} available`
+                                            }
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${useAdvance ? 'bg-emerald-500 border-emerald-400' : 'border-slate-500'
+                                    }`}>
+                                    {useAdvance && <CheckCircle className="w-4 h-4 text-white" />}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Total Payable after adjustments */}
+                        <div className="bg-gradient-to-r from-brand-500/10 to-purple-500/10 rounded-xl p-4 border border-brand-500/20">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <p className="text-brand-300 text-sm font-medium">Total Payable</p>
+                                    <p className="text-xs text-slate-500">
+                                        Bill: ₹{cartTotal} {previousBalance > 0 ? `+ Due: ₹${previousBalance}` : ''} {advanceUsed > 0 ? `- Advance: ₹${advanceUsed}` : ''}
+                                    </p>
+                                </div>
+                                <p className="text-3xl font-black text-white">₹{Math.max(0, totalPayable).toLocaleString()}</p>
+                            </div>
                         </div>
 
                         {/* Payment Methods */}
@@ -118,7 +183,7 @@ const CheckoutModal = ({ isOpen, onClose, cartTotal, customer, previousBalance =
                         </div>
 
                         {/* Amount Input */}
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                             <div className="flex justify-between items-end">
                                 <label className="text-sm font-medium text-slate-300">Amount Received</label>
                                 <button
@@ -126,7 +191,7 @@ const CheckoutModal = ({ isOpen, onClose, cartTotal, customer, previousBalance =
                                     className="px-3 py-1.5 bg-brand-500/10 hover:bg-brand-500/20 text-brand-300 text-xs font-semibold rounded-lg border border-brand-500/20 hover:border-brand-500/40 transition-all flex items-center gap-1.5"
                                 >
                                     <Calculator className="w-3.5 h-3.5" />
-                                    Quick Fill Full Amount
+                                    Full Amount
                                 </button>
                             </div>
 
@@ -153,43 +218,21 @@ const CheckoutModal = ({ isOpen, onClose, cartTotal, customer, previousBalance =
                                 />
                             </div>
 
-                            {/* Calculations */}
-                            {/* Calculations */}
-                            {customer || previousBalance > 0 ? (
-                                (() => {
-                                    const totalDebt = cartTotal + previousBalance;
-                                    const remainingOutstanding = Math.max(0, totalDebt - numericReceived);
-                                    const isFullyPaid = remainingOutstanding === 0;
-
-                                    return (
-                                        <div className={`p-4 rounded-xl border flex flex-col items-center justify-center text-center transition-colors ${isFullyPaid
-                                            ? 'bg-green-500/10 border-green-500/20'
-                                            : 'bg-red-500/10 border-red-500/20'
-                                            }`}>
-                                            <p className={`text-sm font-medium mb-1 ${isFullyPaid ? 'text-green-300' : 'text-red-300'}`}>
-                                                {isFullyPaid ? 'All Clear (Nothing Outstanding)' : 'Total Outstanding Amount'}
-                                            </p>
-                                            <p className={`text-3xl font-bold ${isFullyPaid ? 'text-green-100' : 'text-red-100'}`}>
-                                                ₹{remainingOutstanding.toLocaleString()}
-                                            </p>
-                                            <p className={`text-xs mt-1 ${isFullyPaid ? 'text-green-300/60' : 'text-red-300/60'}`}>
-                                                (Bill: ₹{cartTotal} + Old: ₹{previousBalance}) - Paid: ₹{numericReceived}
-                                            </p>
-                                        </div>
-                                    );
-                                })()
-                            ) : (
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className={`p-3 rounded-xl border border-white/5 ${dueAmount > 0 ? 'bg-red-500/10 border-red-500/20' : 'bg-green-500/10 border-green-500/20'}`}>
-                                        <p className={`text-xs font-medium mb-1 ${dueAmount > 0 ? 'text-red-400' : 'text-green-400'}`}>Balance Due</p>
-                                        <p className={`text-xl font-bold ${dueAmount > 0 ? 'text-white' : 'text-green-200'}`}>₹{dueAmount.toLocaleString()}</p>
-                                    </div>
-                                    <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-                                        <p className="text-xs text-slate-400 font-medium mb-1">Allow Access / Return Change</p>
-                                        <p className="text-xl font-bold text-white">₹{returnAmount.toLocaleString()}</p>
-                                    </div>
+                            {/* Result Cards */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className={`p-3 rounded-xl border ${dueAmount > 0 ? 'bg-red-500/10 border-red-500/20' : 'bg-green-500/10 border-green-500/20'}`}>
+                                    <p className={`text-xs font-medium mb-1 ${dueAmount > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                                        {dueAmount > 0 ? 'Remaining Due' : 'Fully Paid'}
+                                    </p>
+                                    <p className={`text-xl font-bold ${dueAmount > 0 ? 'text-red-200' : 'text-green-200'}`}>₹{dueAmount.toLocaleString()}</p>
                                 </div>
-                            )}
+                                <div className={`p-3 rounded-xl border ${excessPayment > 0 ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-white/5 border-white/5'}`}>
+                                    <p className={`text-xs font-medium mb-1 ${excessPayment > 0 ? 'text-emerald-400' : 'text-slate-400'}`}>
+                                        {excessPayment > 0 ? 'New Advance Credit' : 'Change / Advance'}
+                                    </p>
+                                    <p className={`text-xl font-bold ${excessPayment > 0 ? 'text-emerald-200' : 'text-white'}`}>₹{excessPayment.toLocaleString()}</p>
+                                </div>
+                            </div>
                         </div>
 
                     </div>
@@ -222,3 +265,4 @@ const CheckoutModal = ({ isOpen, onClose, cartTotal, customer, previousBalance =
 };
 
 export default CheckoutModal;
+

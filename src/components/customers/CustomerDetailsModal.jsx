@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Receipt, BarChart3, Calendar, FileText, Printer, Loader2, IndianRupee } from 'lucide-react';
+import { X, Receipt, BarChart3, Calendar, FileText, Printer, Loader2, IndianRupee, Wallet } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import InvoiceReceipt from '../pos/InvoiceReceipt';
 
@@ -168,6 +168,7 @@ const CustomerDetailsModal = ({ isOpen, onClose, customer, sellerProfile }) => {
                                             <th className="px-4 py-3">Amount</th>
                                             <th className="px-4 py-3">Paid</th>
                                             <th className="px-4 py-3">Due</th>
+                                            <th className="px-4 py-3">Advance</th>
                                             <th className="px-4 py-3 rounded-r-lg text-right">Action</th>
                                         </tr>
                                     </thead>
@@ -191,6 +192,19 @@ const CustomerDetailsModal = ({ isOpen, onClose, customer, sellerProfile }) => {
                                                         <span className="text-red-400 font-bold">₹{inv.due_amount}</span>
                                                     ) : (
                                                         <span className="text-slate-600 font-bold">-</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-4">
+                                                    {(inv.advance_credited || inv.new_advance) > 0 ? (
+                                                        <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2 py-1 rounded text-xs">
+                                                            +₹{inv.advance_credited || inv.new_advance}
+                                                        </span>
+                                                    ) : (inv.advance_used) > 0 ? (
+                                                        <span className="text-cyan-400 font-bold bg-cyan-500/10 px-2 py-1 rounded text-xs">
+                                                            -₹{inv.advance_used}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-slate-600">-</span>
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-4 text-right">
@@ -223,6 +237,22 @@ const CustomerDetailsModal = ({ isOpen, onClose, customer, sellerProfile }) => {
                                         <IndianRupee className="w-8 h-8 text-red-500" />
                                     </div>
                                 </div>
+
+                                {/* Advance Balance Card */}
+                                {(customer.advance_balance || 0) > 0 && (
+                                    <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-transparent border border-emerald-500/30 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-emerald-300 font-medium mb-1">Advance Balance</p>
+                                            <h3 className="text-4xl font-bold text-emerald-100 tracking-tight">
+                                                ₹{Number(customer.advance_balance || 0).toLocaleString()}
+                                            </h3>
+                                            <p className="text-xs text-emerald-300/60 mt-2">Customer ka advance balance</p>
+                                        </div>
+                                        <div className="p-4 bg-emerald-500/20 rounded-xl">
+                                            <Wallet className="w-8 h-8 text-emerald-500" />
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Lifetime Stats Grid */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
