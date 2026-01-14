@@ -32,13 +32,19 @@ const CheckoutModal = ({ isOpen, onClose, cartTotal, customer, previousBalance =
 
         setIsSubmitting(true);
 
+        // Calculate how much goes to current bill vs old dues
+        const paidTowardsCurrentBill = Math.min(numericReceived, cartTotal);
+        const currentBillDue = Math.max(0, cartTotal - paidTowardsCurrentBill);
+        const paidTowardsOldDues = Math.max(0, numericReceived - cartTotal);
+
         const paymentData = {
             totalAmount: cartTotal,
-            paidAmount: numericReceived,
-            dueAmount: dueAmount,
+            paidAmount: paidTowardsCurrentBill, // Only what was paid towards THIS bill
+            dueAmount: currentBillDue, // Due for THIS invoice only
             paymentMethod,
-            paymentStatus: dueAmount <= 0.01 ? 'paid' : 'partial',
-            cashReceived: numericReceived,
+            paymentStatus: currentBillDue <= 0.01 ? 'paid' : 'partial',
+            cashReceived: numericReceived, // Total cash received
+            paidTowardsOldDues: paidTowardsOldDues, // For clearing old invoices
             // Advance related
             advanceUsed: advanceUsed,
             newAdvance: excessPayment, // Overpayment becomes advance
@@ -122,8 +128,8 @@ const CheckoutModal = ({ isOpen, onClose, cartTotal, customer, previousBalance =
                             <div
                                 onClick={() => setUseAdvance(!useAdvance)}
                                 className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${useAdvance
-                                        ? 'bg-emerald-500/20 border-emerald-500/40'
-                                        : 'bg-white/5 border-white/10 hover:border-white/20'
+                                    ? 'bg-emerald-500/20 border-emerald-500/40'
+                                    : 'bg-white/5 border-white/10 hover:border-white/20'
                                     }`}
                             >
                                 <div className="flex items-center gap-3">
