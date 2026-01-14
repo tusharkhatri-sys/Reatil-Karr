@@ -170,11 +170,11 @@ const POS = () => {
 
             if (invError) throw invError;
 
-            // 3.5 Handle Previous Dues Payment (Ledger Logic)
-            const cashReceived = paymentData.cashReceived || paymentData.paidAmount;
-            const extraCash = cashReceived - paymentData.paidAmount;
+            // 3.5 Handle Previous Dues Payment with Overpayment
+            // If customer paid more than current bill, use excess to clear old invoices
+            const excessPayment = paymentData.newAdvance || 0;
 
-            if (extraCash > 0 && selectedCustomer) {
+            if (excessPayment > 0 && selectedCustomer) {
                 // Fetch unpaid invoices (oldest first)
                 const { data: unpaidInvoices } = await supabase
                     .from('invoices')
@@ -185,7 +185,9 @@ const POS = () => {
                     .order('created_at', { ascending: true });
 
                 if (unpaidInvoices && unpaidInvoices.length > 0) {
-                    let remainingCash = extraCash;
+                    let remainingCash = excessPayment;
+                    let clearedAmount = 0;
+
                     for (const oldInv of unpaidInvoices) {
                         if (remainingCash <= 0) break;
 
@@ -201,6 +203,18 @@ const POS = () => {
                             .eq('id', oldInv.id);
 
                         remainingCash -= payOff;
+                        clearedAmount += payOff;
+                    }
+
+                    // Update paymentData.newAdvance to reflect remaining after clearing dues
+                    paymentData.newAdvance = remainingCash;
+
+                    // Update the current invoice's advance_credited to reflect actual remaining advance
+                    if (clearedAmount > 0) {
+                        await supabase
+                            .from('invoices')
+                            .update({ advance_credited: remainingCash })
+                            .eq('id', invoice.id);
                     }
                 }
             }
