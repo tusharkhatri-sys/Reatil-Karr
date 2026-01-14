@@ -252,7 +252,7 @@ const POS = () => {
                 ...invoice,
                 items: invoiceItems,
                 previous_balance: previousBalance,
-                cash_received: cashReceived,
+                cash_received: paymentData.cashReceived || paymentData.paidAmount,
                 advance_used: paymentData.advanceUsed || 0,
                 new_advance: paymentData.newAdvance || 0
             };
